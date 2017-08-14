@@ -35,10 +35,11 @@ contract CSToken is owned {
 
 	uint8 public decimals = 8;
 
-	uint256 public totalSupply = 0;
+	uint256 _totalSupply = 0;
 
 	/* This creates an array with all balances */
-	mapping (address => uint256) public balanceOf;
+	mapping (address => uint256) balances;
+
 	mapping (address => uint256) public matureBalanceOf;
 
 	mapping (address => mapping (uint => uint256)) public agingBalanceOf;
@@ -47,10 +48,13 @@ contract CSToken is owned {
 
 	Dividend[] dividends;
 
-	mapping (address => mapping (address => uint256)) public allowance;
+	mapping (address => mapping (address => uint256)) allowed;
 	/* This generates a public event on the blockchain that will notify clients */
 	event Transfer(address indexed from, address indexed to, uint256 value);
+
 	event AgingTransfer(address indexed from, address indexed to, uint256 value, uint agingTime);
+
+	event Approval(address indexed _owner, address indexed _spender, uint256 _value);
 
 	uint countAddressIndexes = 0;
 
@@ -90,25 +94,38 @@ contract CSToken is owned {
 
 	}
 
+	function totalSupply() constant returns (uint256 totalSupply) {
+		totalSupply = _totalSupply;
+	}
+
+	function balanceOf(address _owner) constant returns (uint256 balance) {
+		return balances[_owner];
+	}
+
+	function allowance(address _owner, address _spender) constant returns (uint256 remaining) {
+		return allowed[_owner][_spender];
+	}
+
 	function calculateDividends(uint which) {
 		require(now >= dividends[which].time && !dividends[which].isComplete);
 
 		for (uint i = 1; i <= countAddressIndexes; i++) {
-			balanceOf[addressByIndex[i]] += balanceOf[addressByIndex[i]] * dividends[which].tenThousandth / 10000;
+			balances[addressByIndex[i]] += balances[addressByIndex[i]] * dividends[which].tenThousandth / 10000;
 			matureBalanceOf[addressByIndex[i]] += matureBalanceOf[addressByIndex[i]] * dividends[which].tenThousandth / 10000;
 		}
+		dividends[which].isComplete = true;
 	}
 
 	/* Send coins */
-	function transfer(address _to, uint256 _value) {
+	function transfer(address _to, uint256 _value) returns (bool success) {
 		checkMyAging(msg.sender);
 		require(matureBalanceOf[msg.sender] >= _value);
 
-		require(balanceOf[_to] + _value > balanceOf[_to]);
+		require(balances[_to] + _value > balances[_to]);
 		require(matureBalanceOf[_to] + _value > matureBalanceOf[_to]);
 		// Check for overflows
 
-		balanceOf[msg.sender] -= _value;
+		balances[msg.sender] -= _value;
 		matureBalanceOf[msg.sender] -= _value;
 		// Subtract from the sender
 
@@ -117,8 +134,9 @@ contract CSToken is owned {
 		} else {
 			matureBalanceOf[_to] += _value;
 		}
-		balanceOf[_to] += _value;
+		balances[_to] += _value;
 		Transfer(msg.sender, _to, _value);
+		return true;
 	}
 
 	function mintToken(address target, uint256 mintedAmount, uint agingTime) onlyOwner {
@@ -128,9 +146,9 @@ contract CSToken is owned {
 			matureBalanceOf[target] += mintedAmount;
 		}
 
-		balanceOf[target] += mintedAmount;
+		balances[target] += mintedAmount;
 
-		totalSupply += mintedAmount;
+		_totalSupply += mintedAmount;
 		Transfer(0, owner, mintedAmount);
 		Transfer(owner, target, mintedAmount);
 	}
@@ -153,9 +171,11 @@ contract CSToken is owned {
 
 	/* Allow another contract to spend some tokens in your behalf */
 	function approve(address _spender, uint256 _value) returns (bool success) {
-		allowance[msg.sender][_spender] = _value;
+		allowed[msg.sender][_spender] = _value;
+		Approval(msg.sender, _spender, _value);
 		return true;
 	}
+
 	/* Approve and then communicate the approved contract in a single tx */
 	function approveAndCall(address _spender, uint256 _value, bytes _extraData) returns (bool success) {
 		tokenRecipient spender = tokenRecipient(_spender);
@@ -170,17 +190,17 @@ contract CSToken is owned {
 		checkMyAging(_from);
 		require(matureBalanceOf[_from] >= _value);
 		// Check if the sender has enough
-		assert(balanceOf[_to] + _value > balanceOf[_to]);
+		assert(balances[_to] + _value > balances[_to]);
 		assert(matureBalanceOf[_to] + _value > matureBalanceOf[_to]);
 		// Check for overflows
-		require(_value <= allowance[_from][msg.sender]);
-		// Check allowance
-		balanceOf[_from] -= _value;
+		require(_value <= allowed[_from][msg.sender]);
+		// Check allowed
+		balances[_from] -= _value;
 		matureBalanceOf[_from] -= _value;
 		// Subtract from the sender
-		balanceOf[_to] += _value;
+		balances[_to] += _value;
 		// Add the same to the recipient
-		allowance[_from][msg.sender] -= _value;
+		allowed[_from][msg.sender] -= _value;
 
 		if (agingTimesForPools[_from] > 0 && agingTimesForPools[_from] > now) {
 			addToAging(_from, _to, agingTimesForPools[_from], _value);
@@ -201,7 +221,7 @@ contract CSToken is owned {
 	function checkMyAging(address sender) internal {
 		for (uint k = 0; k < agingTimes.length; k++) {
 			if (agingTimes[k] < now && agingBalanceOf[sender][agingTimes[k]] > 0) {
-				for(uint256 i = 0; i < 24; i++) {
+				for (uint256 i = 0; i < dividends.length; i++) {
 					if(now < dividends[i].time) break;
 					if(!dividends[i].isComplete) break;
 					agingBalanceOf[sender][agingTimes[k]] += agingBalanceOf[sender][agingTimes[k]] * dividends[i].tenThousandth / 10000;
