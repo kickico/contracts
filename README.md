@@ -1,1 +1,1 @@
-# contracts
+# KICKICO Crowdsale contracts
