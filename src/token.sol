@@ -17,19 +17,22 @@ contract owned {
 	}
 }
 
+
 contract tokenRecipient {function receiveApproval(address _from, uint256 _value, address _token, bytes _extraData);}
+
 
 contract CSToken is owned {
 	struct Dividend {
-		uint time;
-		uint tenThousandth;
+		uint256 time;
+		uint256 tenThousandth;
 		bool isComplete;
+		uint256 countComplete;
 	}
 
 	/* Public variables of the token */
 	string public standard = 'Token 0.1';
 
-	string public name = 'KickCoin';
+	string public name = 'Kick Coin';
 
 	string public symbol = 'KC';
 
@@ -40,9 +43,7 @@ contract CSToken is owned {
 	/* This creates an array with all balances */
 	mapping (address => uint256) balances;
 
-	mapping (address => uint256) public matureBalanceOf;
-
-	mapping (address => mapping (uint => uint256)) public agingBalanceOf;
+	mapping (address => mapping (uint256 => uint256)) public agingBalanceOf;
 
 	uint[] agingTimes;
 
@@ -52,46 +53,43 @@ contract CSToken is owned {
 	/* This generates a public event on the blockchain that will notify clients */
 	event Transfer(address indexed from, address indexed to, uint256 value);
 
-	event AgingTransfer(address indexed from, address indexed to, uint256 value, uint agingTime);
+	event AgingTransfer(address indexed from, address indexed to, uint256 value, uint256 agingTime);
 
 	event Approval(address indexed _owner, address indexed _spender, uint256 _value);
 
-	uint countAddressIndexes = 0;
+	address[] public addressByIndex;
 
-	mapping (uint => address) addressByIndex;
-
-	mapping (address => uint) indexByAddress;
+	mapping (address => bool) addressAddedToIndex;
 
 	mapping (address => uint) agingTimesForPools;
 
 	/* Initializes contract with initial supply tokens to the creator of the contract */
 	function CSToken() {
 		owner = msg.sender;
-		dividends.push(Dividend(1509454800, 300, false));
-		dividends.push(Dividend(1512046800, 200, false));
-		dividends.push(Dividend(1514725200, 100, false));
-		dividends.push(Dividend(1517403600, 50, false));
-		dividends.push(Dividend(1519822800, 100, false));
-		dividends.push(Dividend(1522501200, 200, false));
-		dividends.push(Dividend(1525093200, 300, false));
-		dividends.push(Dividend(1527771600, 500, false));
-		dividends.push(Dividend(1530363600, 300, false));
-		dividends.push(Dividend(1533042000, 200, false));
-		dividends.push(Dividend(1535720400, 100, false));
-		dividends.push(Dividend(1538312400, 50, false));
-		dividends.push(Dividend(1540990800, 100, false));
-		dividends.push(Dividend(1543582800, 200, false));
-		dividends.push(Dividend(1546261200, 300, false));
-		dividends.push(Dividend(1548939600, 600, false));
-		dividends.push(Dividend(1551358800, 300, false));
-		dividends.push(Dividend(1554037200, 200, false));
-		dividends.push(Dividend(1556629200, 100, false));
-		dividends.push(Dividend(1559307600, 200, false));
-		dividends.push(Dividend(1561899600, 300, false));
-		dividends.push(Dividend(1564578000, 200, false));
-		dividends.push(Dividend(1567256400, 100, false));
-		dividends.push(Dividend(1569848400, 50, false));
-
+		dividends.push(Dividend(1509454800, 1000, false, 0));
+		dividends.push(Dividend(1512046800, 900, false, 0));
+		dividends.push(Dividend(1514725200, 800, false, 0));
+		dividends.push(Dividend(1517403600, 725, false, 0));
+		dividends.push(Dividend(1519822800, 650, false, 0));
+		dividends.push(Dividend(1522501200, 600, false, 0));
+		dividends.push(Dividend(1525093200, 550, false, 0));
+		dividends.push(Dividend(1527771600, 500, false, 0));
+		dividends.push(Dividend(1530363600, 450, false, 0));
+		dividends.push(Dividend(1533042000, 425, false, 0));
+		dividends.push(Dividend(1535720400, 400, false, 0));
+		dividends.push(Dividend(1538312400, 375, false, 0));
+		dividends.push(Dividend(1540990800, 350, false, 0));
+		dividends.push(Dividend(1543582800, 325, false, 0));
+		dividends.push(Dividend(1546261200, 300, false, 0));
+		dividends.push(Dividend(1548939600, 275, false, 0));
+		dividends.push(Dividend(1551358800, 250, false, 0));
+		dividends.push(Dividend(1554037200, 225, false, 0));
+		dividends.push(Dividend(1556629200, 200, false, 0));
+		dividends.push(Dividend(1559307600, 175, false, 0));
+		dividends.push(Dividend(1561899600, 150, false, 0));
+		dividends.push(Dividend(1564578000, 125, false, 0));
+		dividends.push(Dividend(1567256400, 100, false, 0));
+		dividends.push(Dividend(1569848400, 75, false, 0));
 	}
 
 	function totalSupply() constant returns (uint256 totalSupply) {
@@ -106,65 +104,81 @@ contract CSToken is owned {
 		return allowed[_owner][_spender];
 	}
 
-	function calculateDividends(uint which) {
+	function addAgingTime(uint256 time) onlyOwner {
+		agingTimes.push(time);
+	}
+
+	function calculateDividends(uint256 which, uint256 limit) {
 		require(now >= dividends[which].time && !dividends[which].isComplete);
 
-		for (uint i = 1; i <= countAddressIndexes; i++) {
-			balances[addressByIndex[i]] += balances[addressByIndex[i]] * dividends[which].tenThousandth / 10000;
-			matureBalanceOf[addressByIndex[i]] += matureBalanceOf[addressByIndex[i]] * dividends[which].tenThousandth / 10000;
+		if(limit == 0)
+			limit = addressByIndex.length;
+
+		limit = dividends[which].countComplete + limit;
+		if(limit > addressByIndex.length)
+			limit = addressByIndex.length;
+
+		for (uint256 i = dividends[which].countComplete; i < limit; i++) {
+			uint256 add = balances[addressByIndex[i]] * dividends[which].tenThousandth / 10000;
+			balances[addressByIndex[i]] += add;
+			Transfer(0, owner, add);
+			Transfer(owner, addressByIndex[i], add);
+			if (agingBalanceOf[addressByIndex[i]][0] > 0) {
+				agingBalanceOf[addressByIndex[i]][0] += agingBalanceOf[addressByIndex[i]][0] * dividends[which].tenThousandth / 10000;
+				for (uint256 k = 0; k < agingTimes.length; k++) {
+					agingBalanceOf[addressByIndex[i]][agingTimes[k]] += agingBalanceOf[addressByIndex[i]][agingTimes[k]] * dividends[which].tenThousandth / 10000;
+				}
+			}
 		}
-		dividends[which].isComplete = true;
+		if(limit == addressByIndex.length)
+			dividends[which].isComplete = true;
+		else
+			dividends[which].countComplete = limit;
 	}
 
 	/* Send coins */
 	function transfer(address _to, uint256 _value) returns (bool success) {
 		checkMyAging(msg.sender);
-		require(matureBalanceOf[msg.sender] >= _value);
+		require(accountBalance(msg.sender) >= _value);
 
 		require(balances[_to] + _value > balances[_to]);
-		require(matureBalanceOf[_to] + _value > matureBalanceOf[_to]);
 		// Check for overflows
 
 		balances[msg.sender] -= _value;
-		matureBalanceOf[msg.sender] -= _value;
 		// Subtract from the sender
 
 		if (agingTimesForPools[msg.sender] > 0 && agingTimesForPools[msg.sender] > now) {
 			addToAging(msg.sender, _to, agingTimesForPools[msg.sender], _value);
-		} else {
-			matureBalanceOf[_to] += _value;
 		}
+
 		balances[_to] += _value;
+		addIndex(_to);
 		Transfer(msg.sender, _to, _value);
 		return true;
 	}
 
-	function mintToken(address target, uint256 mintedAmount, uint agingTime) onlyOwner {
+	function mintToken(address target, uint256 mintedAmount, uint256 agingTime) onlyOwner {
 		if (agingTime > now) {
 			addToAging(owner, target, agingTime, mintedAmount);
-		} else {
-			matureBalanceOf[target] += mintedAmount;
 		}
 
 		balances[target] += mintedAmount;
 
 		_totalSupply += mintedAmount;
+		addIndex(target);
 		Transfer(0, owner, mintedAmount);
 		Transfer(owner, target, mintedAmount);
 	}
 
-	function addToAging(address from, address target, uint agingTime, uint256 amount) internal {
-		if (indexByAddress[target] == 0) {
-			indexByAddress[target] = 1;
-			countAddressIndexes++;
-			addressByIndex[countAddressIndexes] = target;
+	function addIndex(address _address) internal {
+		if (!addressAddedToIndex[_address]) {
+			addressAddedToIndex[_address] = true;
+			addressByIndex.push(_address);
 		}
-		bool existTime = false;
-		for (uint i = 0; i < agingTimes.length; i++) {
-			if (agingTimes[i] == agingTime)
-			existTime = true;
-		}
-		if (!existTime) agingTimes.push(agingTime);
+	}
+
+	function addToAging(address from, address target, uint256 agingTime, uint256 amount) internal {
+		agingBalanceOf[target][0] += amount;
 		agingBalanceOf[target][agingTime] += amount;
 		AgingTransfer(from, target, amount, agingTime);
 	}
@@ -188,15 +202,13 @@ contract CSToken is owned {
 	/* A contract attempts to get the coins */
 	function transferFrom(address _from, address _to, uint256 _value) returns (bool success) {
 		checkMyAging(_from);
-		require(matureBalanceOf[_from] >= _value);
+		require(accountBalance(_from) >= _value);
 		// Check if the sender has enough
 		assert(balances[_to] + _value > balances[_to]);
-		assert(matureBalanceOf[_to] + _value > matureBalanceOf[_to]);
 		// Check for overflows
 		require(_value <= allowed[_from][msg.sender]);
 		// Check allowed
 		balances[_from] -= _value;
-		matureBalanceOf[_from] -= _value;
 		// Subtract from the sender
 		balances[_to] += _value;
 		// Add the same to the recipient
@@ -204,10 +216,9 @@ contract CSToken is owned {
 
 		if (agingTimesForPools[_from] > 0 && agingTimesForPools[_from] > now) {
 			addToAging(_from, _to, agingTimesForPools[_from], _value);
-		} else {
-			matureBalanceOf[_to] += _value;
 		}
 
+		addIndex(_to);
 		Transfer(_from, _to, _value);
 		return true;
 	}
@@ -219,20 +230,25 @@ contract CSToken is owned {
 	}
 
 	function checkMyAging(address sender) internal {
-		for (uint k = 0; k < agingTimes.length; k++) {
-			if (agingTimes[k] < now && agingBalanceOf[sender][agingTimes[k]] > 0) {
-				for (uint256 i = 0; i < dividends.length; i++) {
-					if(now < dividends[i].time) break;
-					if(!dividends[i].isComplete) break;
-					agingBalanceOf[sender][agingTimes[k]] += agingBalanceOf[sender][agingTimes[k]] * dividends[i].tenThousandth / 10000;
-				}
-				matureBalanceOf[sender] += agingBalanceOf[sender][agingTimes[k]];
+		if(agingBalanceOf[sender][0] == 0) return;
+
+		for (uint256 k = 0; k < agingTimes.length; k++) {
+			if(agingTimes[k] < now) {
+				agingBalanceOf[sender][0] -= agingBalanceOf[sender][agingTimes[k]];
 				agingBalanceOf[sender][agingTimes[k]] = 0;
 			}
 		}
 	}
 
-	function addAgingTimesForPool(address poolAddress, uint agingTime) onlyOwner {
+	function addAgingTimesForPool(address poolAddress, uint256 agingTime) onlyOwner {
 		agingTimesForPools[poolAddress] = agingTime;
+	}
+
+	function countAddresses() constant returns (uint256 length) {
+		return addressByIndex.length;
+	}
+
+	function accountBalance(address _address) constant returns (uint256 balance) {
+		return balances[_address] - agingBalanceOf[_address][0];
 	}
 }
