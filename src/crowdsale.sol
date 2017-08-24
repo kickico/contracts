@@ -103,7 +103,7 @@ contract KickicoCrowdsale is owned {
 
 	bool parametersHaveBeenSet = false;
 
-	function Crowdsale(address _tokenAddress, address _prPool, address _founders, address _advisory, address _bounties, address _lottery, address _angelInvestors, address _oldTokenAddress) {
+	function KickicoCrowdsale(address _tokenAddress, address _prPool, address _founders, address _advisory, address _bounties, address _lottery, address _angelInvestors, address _oldTokenAddress) {
 		tokenReward = CSToken(_tokenAddress);
 		oldTokenReward = CSToken(_oldTokenAddress);
 
