@@ -1,5 +1,6 @@
 pragma solidity ^0.4.2;
 
+
 contract owned {
 	address public owner;
 
@@ -22,17 +23,12 @@ contract tokenRecipient {function receiveApproval(address _from, uint256 _value,
 
 
 contract CSToken is owned {
-	struct Dividend {
-		uint256 time;
-		uint256 tenThousandth;
-		bool isComplete;
-		uint256 countComplete;
-	}
+	struct Dividend {uint256 time; uint256 tenThousandth; uint256 countComplete;}
 
 	/* Public variables of the token */
 	string public standard = 'Token 0.1';
 
-	string public name = 'Kick Coin';
+	string public name = 'KickCoin';
 
 	string public symbol = 'KC';
 
@@ -63,33 +59,63 @@ contract CSToken is owned {
 
 	mapping (address => uint) agingTimesForPools;
 
+	uint16 currentDividendIndex = 1;
+
+	mapping (address => uint) calculatedDividendsIndex;
+
 	/* Initializes contract with initial supply tokens to the creator of the contract */
 	function CSToken() {
 		owner = msg.sender;
-		dividends.push(Dividend(1509454800, 1000, false, 0));
-		dividends.push(Dividend(1512046800, 900, false, 0));
-		dividends.push(Dividend(1514725200, 800, false, 0));
-		dividends.push(Dividend(1517403600, 725, false, 0));
-		dividends.push(Dividend(1519822800, 650, false, 0));
-		dividends.push(Dividend(1522501200, 600, false, 0));
-		dividends.push(Dividend(1525093200, 550, false, 0));
-		dividends.push(Dividend(1527771600, 500, false, 0));
-		dividends.push(Dividend(1530363600, 450, false, 0));
-		dividends.push(Dividend(1533042000, 425, false, 0));
-		dividends.push(Dividend(1535720400, 400, false, 0));
-		dividends.push(Dividend(1538312400, 375, false, 0));
-		dividends.push(Dividend(1540990800, 350, false, 0));
-		dividends.push(Dividend(1543582800, 325, false, 0));
-		dividends.push(Dividend(1546261200, 300, false, 0));
-		dividends.push(Dividend(1548939600, 275, false, 0));
-		dividends.push(Dividend(1551358800, 250, false, 0));
-		dividends.push(Dividend(1554037200, 225, false, 0));
-		dividends.push(Dividend(1556629200, 200, false, 0));
-		dividends.push(Dividend(1559307600, 175, false, 0));
-		dividends.push(Dividend(1561899600, 150, false, 0));
-		dividends.push(Dividend(1564578000, 125, false, 0));
-		dividends.push(Dividend(1567256400, 100, false, 0));
-		dividends.push(Dividend(1569848400, 75, false, 0));
+		// So that the index starts with 1
+		dividends.push(Dividend(0, 0, 0));
+		// 31.10.2017 09:00:00
+		dividends.push(Dividend(1509440400, 30, 0));
+		// 30.11.2017 09:00:00
+		dividends.push(Dividend(1512032400, 20, 0));
+		// 31.12.2017 09:00:00
+		dividends.push(Dividend(1514710800, 10, 0));
+		// 31.01.2018 09:00:00
+		dividends.push(Dividend(1517389200, 5, 0));
+		// 28.02.2018 09:00:00
+		dividends.push(Dividend(1519808400, 10, 0));
+		// 31.03.2018 09:00:00
+		dividends.push(Dividend(1522486800, 20, 0));
+		// 30.04.2018 09:00:00
+		dividends.push(Dividend(1525078800, 30, 0));
+		// 31.05.2018 09:00:00
+		dividends.push(Dividend(1527757200, 50, 0));
+		// 30.06.2018 09:00:00
+		dividends.push(Dividend(1530349200, 30, 0));
+		// 31.07.2018 09:00:00
+		dividends.push(Dividend(1533027600, 20, 0));
+		// 31.08.2018 09:00:00
+		dividends.push(Dividend(1535706000, 10, 0));
+		// 30.09.2018 09:00:00
+		dividends.push(Dividend(1538298000, 5, 0));
+		// 31.10.2018 09:00:00
+		dividends.push(Dividend(1540976400, 10, 0));
+		// 30.11.2018 09:00:00
+		dividends.push(Dividend(1543568400, 20, 0));
+		// 31.12.2018 09:00:00
+		dividends.push(Dividend(1546246800, 30, 0));
+		// 31.01.2019 09:00:00
+		dividends.push(Dividend(1548925200, 60, 0));
+		// 28.02.2019 09:00:00
+		dividends.push(Dividend(1551344400, 30, 0));
+		// 31.03.2019 09:00:00
+		dividends.push(Dividend(1554022800, 20, 0));
+		// 30.04.2019 09:00:00
+		dividends.push(Dividend(1556614800, 10, 0));
+		// 31.05.2019 09:00:00
+		dividends.push(Dividend(1559307600, 20, 0));
+		// 30.06.2019 09:00:00
+		dividends.push(Dividend(1561885200, 30, 0));
+		// 31.07.2019 09:00:00
+		dividends.push(Dividend(1564563600, 20, 0));
+		// 31.08.2019 09:00:00
+		dividends.push(Dividend(1567242000, 10, 0));
+		// 30.09.2019 09:00:00
+		dividends.push(Dividend(1569834000, 5, 0));
 	}
 
 	function totalSupply() constant returns (uint256 totalSupply) {
@@ -108,44 +134,60 @@ contract CSToken is owned {
 		agingTimes.push(time);
 	}
 
-	function calculateDividends(uint256 which, uint256 limit) {
-		require(now >= dividends[which].time && !dividends[which].isComplete);
+	function calculateDividends(uint256 limit) {
+		require(now >= dividends[currentDividendIndex].time);
+		require(limit > 0);
 
-		if(limit == 0)
+		limit = dividends[currentDividendIndex].countComplete + limit;
+
+		if (limit > addressByIndex.length) {
 			limit = addressByIndex.length;
+		}
 
-		limit = dividends[which].countComplete + limit;
-		if(limit > addressByIndex.length)
-			limit = addressByIndex.length;
+		for (uint256 i = dividends[currentDividendIndex].countComplete; i < limit; i++) {
+			addDividendsForAddress(addressByIndex[i]);
+		}
+		if (limit == addressByIndex.length) {
+			currentDividendIndex++;
+		}
+		else {
+			dividends[currentDividendIndex].countComplete = limit;
+		}
+	}
 
-		for (uint256 i = dividends[which].countComplete; i < limit; i++) {
-			uint256 add = balances[addressByIndex[i]] * dividends[which].tenThousandth / 10000;
-			balances[addressByIndex[i]] += add;
-			Transfer(0, owner, add);
-			Transfer(owner, addressByIndex[i], add);
-			if (agingBalanceOf[addressByIndex[i]][0] > 0) {
-				agingBalanceOf[addressByIndex[i]][0] += agingBalanceOf[addressByIndex[i]][0] * dividends[which].tenThousandth / 10000;
-				for (uint256 k = 0; k < agingTimes.length; k++) {
-					agingBalanceOf[addressByIndex[i]][agingTimes[k]] += agingBalanceOf[addressByIndex[i]][agingTimes[k]] * dividends[which].tenThousandth / 10000;
-				}
+	function addDividendsForAddress(address _address) internal {
+		// skip calculating dividends, if already calculated for this address
+		if (calculatedDividendsIndex[_address] >= currentDividendIndex) return;
+
+		uint256 add = balances[_address] * dividends[currentDividendIndex].tenThousandth / 1000;
+		balances[_address] += add;
+		Transfer(0, owner, add);
+		Transfer(owner, _address, add);
+
+		if (agingBalanceOf[_address][0] > 0) {
+			agingBalanceOf[_address][0] += agingBalanceOf[_address][0] * dividends[currentDividendIndex].tenThousandth / 1000;
+			for (uint256 k = 0; k < agingTimes.length; k++) {
+				agingBalanceOf[_address][agingTimes[k]] += agingBalanceOf[_address][agingTimes[k]] * dividends[currentDividendIndex].tenThousandth / 1000;
 			}
 		}
-		if(limit == addressByIndex.length)
-			dividends[which].isComplete = true;
-		else
-			dividends[which].countComplete = limit;
+		calculatedDividendsIndex[_address] = currentDividendIndex;
 	}
 
 	/* Send coins */
 	function transfer(address _to, uint256 _value) returns (bool success) {
 		checkMyAging(msg.sender);
+		if(now >= dividends[currentDividendIndex].time) {
+			addDividendsForAddress(msg.sender);
+			addDividendsForAddress(_to);
+		}
+
 		require(accountBalance(msg.sender) >= _value);
 
-		require(balances[_to] + _value > balances[_to]);
 		// Check for overflows
+		require(balances[_to] + _value > balances[_to]);
 
-		balances[msg.sender] -= _value;
 		// Subtract from the sender
+		balances[msg.sender] -= _value;
 
 		if (agingTimesForPools[msg.sender] > 0 && agingTimesForPools[msg.sender] > now) {
 			addToAging(msg.sender, _to, agingTimesForPools[msg.sender], _value);
@@ -202,6 +244,10 @@ contract CSToken is owned {
 	/* A contract attempts to get the coins */
 	function transferFrom(address _from, address _to, uint256 _value) returns (bool success) {
 		checkMyAging(_from);
+		if(now < dividends[currentDividendIndex].time) {
+			addDividendsForAddress(_from);
+			addDividendsForAddress(_to);
+		}
 		require(accountBalance(_from) >= _value);
 		// Check if the sender has enough
 		assert(balances[_to] + _value > balances[_to]);
@@ -230,10 +276,10 @@ contract CSToken is owned {
 	}
 
 	function checkMyAging(address sender) internal {
-		if(agingBalanceOf[sender][0] == 0) return;
+		if (agingBalanceOf[sender][0] == 0) return;
 
 		for (uint256 k = 0; k < agingTimes.length; k++) {
-			if(agingTimes[k] < now) {
+			if (agingTimes[k] < now) {
 				agingBalanceOf[sender][0] -= agingBalanceOf[sender][agingTimes[k]];
 				agingBalanceOf[sender][agingTimes[k]] = 0;
 			}
