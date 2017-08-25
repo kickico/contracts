@@ -302,12 +302,16 @@ contract KickicoCrowdsale is owned {
 		processPayment(msg.sender, msg.value, false);
 	}
 
+	function changeTokenOwner(address _owner) onlyOwner {
+		tokenReward.changeOwner(_owner);
+	}
+
 	function kill() onlyOwner {
 		require(isIcoClosed());
 		if(this.balance > 0) {
 			owner.transfer(this.balance);
 		}
-		tokenReward.changeOwner(owner);
+		changeTokenOwner(owner);
 		selfdestruct(owner);
 	}
 }

@@ -22,7 +22,57 @@ contract owned {
 contract tokenRecipient {function receiveApproval(address _from, uint256 _value, address _token, bytes _extraData);}
 
 
-contract CSToken is owned {
+contract Utils {
+	/**
+		constructor
+	*/
+	function Utils() {
+	}
+
+	// validates an address - currently only checks that it isn't null
+	modifier validAddress(address _address) {
+		require(_address != 0x0);
+		_;
+	}
+
+	// verifies that the address is different than this contract address
+	modifier notThis(address _address) {
+		require(_address != address(this));
+		_;
+	}
+
+	// Overflow protected math functions
+
+	/**
+		@dev returns the sum of _x and _y, asserts if the calculation overflows
+
+		@param _x   value 1
+		@param _y   value 2
+
+		@return sum
+	*/
+	function safeAdd(uint256 _x, uint256 _y) internal returns (uint256) {
+		uint256 z = _x + _y;
+		assert(z >= _x);
+		return z;
+	}
+
+	/**
+		@dev returns the difference of _x minus _y, asserts if the subtraction results in a negative number
+
+		@param _x   minuend
+		@param _y   subtrahend
+
+		@return difference
+	*/
+	function safeSub(uint256 _x, uint256 _y) internal returns (uint256) {
+		assert(_x >= _y);
+		return _x - _y;
+	}
+}
+
+
+contract CSToken is owned, Utils {
 	struct Dividend {uint256 time; uint256 tenThousandth; uint256 countComplete;}
 
 	/* Public variables of the token */
@@ -52,6 +102,10 @@ contract CSToken is owned {
 	event AgingTransfer(address indexed from, address indexed to, uint256 value, uint256 agingTime);
 
 	event Approval(address indexed _owner, address indexed _spender, uint256 _value);
+	// triggered when the total supply is increased
+	event Issuance(uint256 _amount);
+	// triggered when the total supply is decreased
+	event Destruction(uint256 _amount);
 
 	address[] public addressByIndex;
 
@@ -62,6 +116,8 @@ contract CSToken is owned {
 	uint16 currentDividendIndex = 1;
 
 	mapping (address => uint) calculatedDividendsIndex;
+
+	bool public transfersEnabled = true;
 
 	/* Initializes contract with initial supply tokens to the creator of the contract */
 	function CSToken() {
@@ -118,6 +174,11 @@ contract CSToken is owned {
 		dividends.push(Dividend(1569834000, 5, 0));
 	}
 
+	modifier transfersAllowed {
+		assert(transfersEnabled);
+		_;
+	}
+
 	function totalSupply() constant returns (uint256 totalSupply) {
 		totalSupply = _totalSupply;
 	}
@@ -161,8 +222,7 @@ contract CSToken is owned {
 
 		uint256 add = balances[_address] * dividends[currentDividendIndex].tenThousandth / 1000;
 		balances[_address] += add;
-		Transfer(0, owner, add);
-		Transfer(owner, _address, add);
+		Transfer(this, _address, add);
 
 		if (agingBalanceOf[_address][0] > 0) {
 			agingBalanceOf[_address][0] += agingBalanceOf[_address][0] * dividends[currentDividendIndex].tenThousandth / 1000;
@@ -174,17 +234,14 @@ contract CSToken is owned {
 	}
 
 	/* Send coins */
-	function transfer(address _to, uint256 _value) returns (bool success) {
+	function transfer(address _to, uint256 _value) transfersAllowed returns (bool success) {
 		checkMyAging(msg.sender);
-		if(now >= dividends[currentDividendIndex].time) {
+		if (now >= dividends[currentDividendIndex].time) {
 			addDividendsForAddress(msg.sender);
 			addDividendsForAddress(_to);
 		}
 
 		require(accountBalance(msg.sender) >= _value);
-
-		// Check for overflows
-		require(balances[_to] + _value > balances[_to]);
 
 		// Subtract from the sender
 		balances[msg.sender] -= _value;
@@ -193,7 +250,8 @@ contract CSToken is owned {
 			addToAging(msg.sender, _to, agingTimesForPools[msg.sender], _value);
 		}
 
-		balances[_to] += _value;
+		balances[_to] = safeAdd(balances[_to], _value);
+
 		addIndex(_to);
 		Transfer(msg.sender, _to, _value);
 		return true;
@@ -208,8 +266,7 @@ contract CSToken is owned {
 
 		_totalSupply += mintedAmount;
 		addIndex(target);
-		Transfer(0, owner, mintedAmount);
-		Transfer(owner, target, mintedAmount);
+		Transfer(this, target, mintedAmount);
 	}
 
 	function addIndex(address _address) internal {
@@ -242,22 +299,23 @@ contract CSToken is owned {
 	}
 
 	/* A contract attempts to get the coins */
-	function transferFrom(address _from, address _to, uint256 _value) returns (bool success) {
+	function transferFrom(address _from, address _to, uint256 _value) transfersAllowed returns (bool success) {
 		checkMyAging(_from);
-		if(now < dividends[currentDividendIndex].time) {
+		if (now < dividends[currentDividendIndex].time) {
 			addDividendsForAddress(_from);
 			addDividendsForAddress(_to);
 		}
-		require(accountBalance(_from) >= _value);
 		// Check if the sender has enough
-		assert(balances[_to] + _value > balances[_to]);
-		// Check for overflows
-		require(_value <= allowed[_from][msg.sender]);
+		require(accountBalance(_from) >= _value);
+
 		// Check allowed
-		balances[_from] -= _value;
+		require(_value <= allowed[_from][msg.sender]);
+
 		// Subtract from the sender
-		balances[_to] += _value;
+		balances[_from] -= _value;
 		// Add the same to the recipient
+		balances[_to] = safeAdd(balances[_to], _value);
+
 		allowed[_from][msg.sender] -= _value;
 
 		if (agingTimesForPools[_from] > 0 && agingTimesForPools[_from] > now) {
@@ -296,5 +354,30 @@ contract CSToken is owned {
 
 	function accountBalance(address _address) constant returns (uint256 balance) {
 		return balances[_address] - agingBalanceOf[_address][0];
+	}
+
+	function disableTransfers(bool _disable) public onlyOwner {
+		transfersEnabled = !_disable;
+	}
+
+	function issue(address _to, uint256 _amount) public onlyOwner validAddress(_to) notThis(_to) {
+		_totalSupply = safeAdd(_totalSupply, _amount);
+		balances[_to] = safeAdd(balances[_to], _amount);
+
+		Issuance(_amount);
+		Transfer(this, _to, _amount);
+	}
+
+	function destroy(address _from, uint256 _amount) public {
+		checkMyAging(msg.sender);
+		// validate input
+		require(msg.sender == _from || msg.sender == owner);
+		require(accountBalance(_from) >= _amount);
+
+		balances[_from] = safeSub(balances[_from], _amount);
+		_totalSupply = safeSub(_totalSupply, _amount);
+
+		Transfer(_from, this, _amount);
+		Destruction(_amount);
 	}
 }
