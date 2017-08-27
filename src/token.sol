@@ -191,8 +191,15 @@ contract CSToken is owned, Utils {
 		return allowed[_owner][_spender];
 	}
 
+	bool allAgingTimesHasBeenAdded = false;
+
 	function addAgingTime(uint256 time) onlyOwner {
+		require(!allAgingTimesHasBeenAdded);
 		agingTimes.push(time);
+	}
+
+	function allAgingTimesAdded() onlyOwner {
+		allAgingTimesHasBeenAdded = true;
 	}
 
 	function calculateDividends(uint256 limit) {
@@ -223,6 +230,7 @@ contract CSToken is owned, Utils {
 		uint256 add = balances[_address] * dividends[currentDividendIndex].tenThousandth / 1000;
 		balances[_address] += add;
 		Transfer(this, _address, add);
+		_totalSupply = safeAdd(_totalSupply, add);
 
 		if (agingBalanceOf[_address][0] > 0) {
 			agingBalanceOf[_address][0] += agingBalanceOf[_address][0] * dividends[currentDividendIndex].tenThousandth / 1000;
@@ -301,7 +309,7 @@ contract CSToken is owned, Utils {
 	/* A contract attempts to get the coins */
 	function transferFrom(address _from, address _to, uint256 _value) transfersAllowed returns (bool success) {
 		checkMyAging(_from);
-		if (now < dividends[currentDividendIndex].time) {
+		if (now >= dividends[currentDividendIndex].time) {
 			addDividendsForAddress(_from);
 			addDividendsForAddress(_to);
 		}
@@ -364,6 +372,7 @@ contract CSToken is owned, Utils {
 		_totalSupply = safeAdd(_totalSupply, _amount);
 		balances[_to] = safeAdd(balances[_to], _amount);
 
+		addIndex(_to);
 		Issuance(_amount);
 		Transfer(this, _to, _amount);
 	}
