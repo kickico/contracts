@@ -45,6 +45,8 @@ contract CSToken is owned {uint8 public decimals;
 
 	function addAgingTime(uint time);
 
+	function allAgingTimesAdded();
+
 	function addAgingTimesForPool(address poolAddress, uint agingTime);
 
 	function countAddresses() constant returns (uint256 length);
@@ -57,6 +59,8 @@ contract KickicoCrowdsale is owned {
 	bool public IcoClosedManually = false;
 
 	uint public threshold = 200000 ether;
+
+	uint public goal = 50000 ether;
 
 	uint public totalCollected = 0;
 
@@ -143,6 +147,7 @@ contract KickicoCrowdsale is owned {
 		tokenReward.addAgingTime(lotteryPoolAgingTime);
 		tokenReward.addAgingTime(angelInvestorsPoolAgingTime);
 		tokenReward.addAgingTime(foundersPoolAgingTime);
+		tokenReward.allAgingTimesAdded();
 
 		IcoStagePeriod.push(1504011600);
 		IcoStagePeriod.push(1506718800);
@@ -230,7 +235,7 @@ contract KickicoCrowdsale is owned {
 	}
 
 	function getBonusByRaised() internal returns (uint256) {
-		uint raisedInPercent = totalCollected * 100 / threshold;
+		uint raisedInPercent = totalCollected * 100 / goal;
 		if (raisedInPercent > 50) return 0;
 		for (uint i = 0; i < bonusesAfterClose.length; i++) {
 			if (i * 10 <= raisedInPercent && (i + 1) * 10 > raisedInPercent) {
