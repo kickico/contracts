@@ -119,6 +119,8 @@ contract CSToken is owned, Utils {
 
 	bool public transfersEnabled = true;
 
+	event NewSmartToken(address _token);
+
 	/* Initializes contract with initial supply tokens to the creator of the contract */
 	function CSToken() {
 		owner = msg.sender;
@@ -172,6 +174,8 @@ contract CSToken is owned, Utils {
 		dividends.push(Dividend(1567242000, 10, 0));
 		// 30.09.2019 09:00:00
 		dividends.push(Dividend(1569834000, 5, 0));
+
+		NewSmartToken(address(this));
 	}
 
 	modifier transfersAllowed {
@@ -192,7 +196,6 @@ contract CSToken is owned, Utils {
 	}
 
 	bool allAgingTimesHasBeenAdded = false;
-
 	function addAgingTime(uint256 time) onlyOwner {
 		require(!allAgingTimesHasBeenAdded);
 		agingTimes.push(time);
@@ -230,6 +233,7 @@ contract CSToken is owned, Utils {
 		uint256 add = balances[_address] * dividends[currentDividendIndex].tenThousandth / 1000;
 		balances[_address] += add;
 		Transfer(this, _address, add);
+		Issuance(add);
 		_totalSupply = safeAdd(_totalSupply, add);
 
 		if (agingBalanceOf[_address][0] > 0) {
@@ -273,6 +277,7 @@ contract CSToken is owned, Utils {
 		balances[target] += mintedAmount;
 
 		_totalSupply += mintedAmount;
+		Issuance(mintedAmount);
 		addIndex(target);
 		Transfer(this, target, mintedAmount);
 	}

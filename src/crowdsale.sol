@@ -59,7 +59,6 @@ contract KickicoCrowdsale is owned {
 	bool public IcoClosedManually = false;
 
 	uint public threshold = 200000 ether;
-
 	uint public goal = 50000 ether;
 
 	uint public totalCollected = 0;
@@ -70,7 +69,7 @@ contract KickicoCrowdsale is owned {
 
 	uint prPoolAgingTime = 1513242000;
 
-	uint advisoryPoolAgingTime = 1509526800;
+	uint advisoryPoolAgingTime = 1535533200;
 
 	uint bountiesPoolAgingTime = 1510736400;
 
@@ -79,6 +78,8 @@ contract KickicoCrowdsale is owned {
 	uint angelInvestorsPoolAgingTime = 1506848400;
 
 	uint foundersPoolAgingTime = 1535533200;
+
+	uint chinaPoolAgingTime = 1509526800;
 
 	uint[] public bonuses;
 
@@ -96,6 +97,8 @@ contract KickicoCrowdsale is owned {
 
 	address public angelInvestors;
 
+	address public china;
+
 	uint tokenMultiplier = 10;
 
 	CSToken public tokenReward;
@@ -107,7 +110,7 @@ contract KickicoCrowdsale is owned {
 
 	bool parametersHaveBeenSet = false;
 
-	function KickicoCrowdsale(address _tokenAddress, address _prPool, address _founders, address _advisory, address _bounties, address _lottery, address _angelInvestors, address _oldTokenAddress) {
+	function KickicoCrowdsale(address _tokenAddress, address _prPool, address _founders, address _advisory, address _bounties, address _lottery, address _angelInvestors, address _china, address _oldTokenAddress) {
 		tokenReward = CSToken(_tokenAddress);
 		oldTokenReward = CSToken(_oldTokenAddress);
 
@@ -120,6 +123,7 @@ contract KickicoCrowdsale is owned {
 		bounties = _bounties;
 		lottery = _lottery;
 		angelInvestors = _angelInvestors;
+		china = _china;
 	}
 
 	function setParams() onlyOwner {
@@ -139,6 +143,7 @@ contract KickicoCrowdsale is owned {
 		tokenReward.mintToken(lottery, 1000000 * tokenMultiplier, 0);
 		tokenReward.mintToken(angelInvestors, 30000000 * tokenMultiplier, 0);
 		tokenReward.mintToken(prPool, 23000000 * tokenMultiplier, 0);
+		tokenReward.mintToken(china, 8000000 * tokenMultiplier, 0);
 
 		tokenReward.addAgingTime(agingTime);
 		tokenReward.addAgingTime(prPoolAgingTime);
@@ -147,6 +152,7 @@ contract KickicoCrowdsale is owned {
 		tokenReward.addAgingTime(lotteryPoolAgingTime);
 		tokenReward.addAgingTime(angelInvestorsPoolAgingTime);
 		tokenReward.addAgingTime(foundersPoolAgingTime);
+		tokenReward.addAgingTime(chinaPoolAgingTime);
 		tokenReward.allAgingTimesAdded();
 
 		IcoStagePeriod.push(1504011600);
@@ -212,12 +218,12 @@ contract KickicoCrowdsale is owned {
 		for (uint i = 0; i < bonuses.length; i++) {
 			if (amount < bonuses[i]) break;
 
-			if (amount >= bonuses[i] && (amount < bonuses[i + 1] || i == bonuses.length - 1)) {
+			if (amount >= bonuses[i] && (i == bonuses.length - 1 || amount < bonuses[i + 1])) {
 				if (i < 15) {
 					_price = _price * 1000 / (1000 + ((i + 1 + (i > 11 ? 1 : 0)) * 5));
 				}
 				else {
-					_price = _price * 1000 / (1000 + ((8 + i - 15) * 10));
+					_price = _price * 1000 / (1000 + ((8 + i - 14) * 10));
 				}
 			}
 		}
@@ -272,7 +278,7 @@ contract KickicoCrowdsale is owned {
 
 	function customPayment(address _recipient, uint256 _amount) onlyServer {
 		require(parametersHaveBeenSet);
-		require(_amount >= 50 finney);
+		require(_amount >= 10 finney);
 
 		// validate by stage periods
 		require(now >= IcoStagePeriod[0] && now < IcoStagePeriod[1]);
